@@ -149,9 +149,7 @@ def tabulate_vcf(vcf):
 
 
 def summarise_variants(variants_df):
-    #   variants_df["path"] = ""
       df = variants_df.loc[variants_df['clnsig_path']==True, :]
-
       grouped_df = df.groupby(['gene_symbol']).sum()
       print(grouped_df.head())
       return grouped_df

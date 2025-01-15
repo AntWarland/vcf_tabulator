@@ -1,9 +1,8 @@
 import argparse
+import os
 import pandas as pd
 from funcs import tabulate_vcf, summarise_variants
 
-
-pd.set_option('display.max_rows', 500)
 
 parser = argparse.ArgumentParser(description='Find UPD events in NGS Trio Data')
 parser.add_argument('--vcf', type=str, required=True,
@@ -13,14 +12,18 @@ args = parser.parse_args()
 
 vcf = args.vcf
 
-pd.set_option('display.max_rows', 500)
+file_path = "./df_all_variants_binaries.csv"
 
-### First time you run the script, unhash the following the 3 lines. Hash again for subsequent runs ###
-# df = tabulate_vcf(vcf)
-# df.to_csv("./df_all_variants_binaries.csv") 
-# print("dataframe saved to file.")
+if os.path.exists(file_path):
+    print("All variants csv file exists, loading ...")
+    df = pd.read_csv("./df_all_variants_binaries.csv", index_col=0)
+else:
+    print("All variants csv file does not exist, tabulating VCF")
+    df = tabulate_vcf(vcf)
+    df.to_csv(file_path) 
+    print(f"All variants csv file saved to {file_path}")
 
-df = pd.read_csv("./df_all_variants_binaries.csv", index_col=0)
-
+summary_path = "./df_path_variants_conseq.csv"
 summary_df = summarise_variants(df)
-summary_df.to_csv("./df_path_variants_conseq.csv")
+summary_df.to_csv(summary_path)
+print(f"Summary table csv file saved to {summary_path}")
