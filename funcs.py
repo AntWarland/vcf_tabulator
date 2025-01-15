@@ -31,7 +31,8 @@ def tabulate_vcf(vcf):
             
             try:
                 gene_symbol = rec.info['GENEINFO'].split(":",2)[0]
-                gene_id = rec.info['GENEINFO'].split(":",2)[1]
+                gene_id_pre = rec.info['GENEINFO'].split(":",2)[1]
+                gene_id = gene_id_pre.split("|",2)[0]
             except KeyError:
                 gene_symbol = "NA"
                 gene_id = "NA"
@@ -150,6 +151,6 @@ def tabulate_vcf(vcf):
 
 def summarise_variants(variants_df):
       df = variants_df.loc[variants_df['clnsig_path']==True, :]
-      grouped_df = df.groupby(['gene_symbol']).sum()
+      grouped_df = df.groupby(['gene_symbol', 'gene_id']).sum()
       print(grouped_df.head())
       return grouped_df
