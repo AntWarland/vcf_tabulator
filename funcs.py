@@ -1,17 +1,9 @@
-import io
 import pandas as pd
 from pysam import VariantFile
-import re
 import numpy as np
-import math
-# from pyvariantfilter.variant import Variant
-# import numpy as np
-# import seaborn as sns
-# import matplotlib.pyplot as plt
-# import scipy
 
 
-def get_t(dictionary, col_to_search, df, empty_col):
+def translate_column(dictionary, col_to_search, df, empty_col):
     """
     'Translates' values in a dataframe to a new column according to a given dictionary
     """
@@ -32,8 +24,7 @@ def tabulate_vcf(vcf):
     gene_symbols = []
     gene_ids = []
     clnsigs = []
-    mc1s = []
-    mc2s = []
+    mcs = []
     poses = []
 
     for rec in vcf_in.fetch():
@@ -46,26 +37,19 @@ def tabulate_vcf(vcf):
                 gene_id = "NA"
             
             try:
-                clnsig = rec.info['CLNSIG'][0]                
+                clnsig = rec.info['CLNSIG'][0]          
             except KeyError:
                 clnsig = "NA"
-                # print(f"{var_id} clnsig invalid")
             
             # MC : note maximum number of elements observed in the rec.info['MC'] tuple is 2 #
             try:
-                # slice the first element in the consequence tuple #
-                mc1 = rec.info['MC'][0]
-                # filter out noise around the consequence string #
-                mc1 = re.findall(r"\|(\S*)$", mc1)[0]
-
                 if len(rec.info['MC']) > 1 :
-                    mc2 = rec.info['MC'][1]
-                    mc2 = re.findall(r"\|(\S*)$", mc2)[0]
+                    mc = str(rec.info['MC'][0]) + " " + str(rec.info['MC'][0])
+                    # mc2 = re.findall(r"\|(\S*)$", mc2)[0]
                 else:
-                    mc2 = "NA"
+                    mc = str(rec.info['MC'][0])
             except KeyError:
-                mc1 = np.NaN
-                mc2 = np.NaN
+                mc = np.NaN
                 # print(f"{var_id} variant type invalid")
 
             pos = rec.pos         
@@ -73,29 +57,21 @@ def tabulate_vcf(vcf):
             gene_symbols.append(gene_symbol)
             gene_ids.append(gene_id)
             clnsigs.append(clnsig)
-            mc1s.append(mc1)
-            mc2s.append(mc2)
+            mcs.append(mc)
             poses.append(pos)
-            # print(f"rec.info.CLNSIG = {rec.info['CLNSIG']}")
             counter += 1
     print(counter)
 
     df_dict = {'gene_symbol': gene_symbols,
                 'gene_id': gene_ids,
                 'clnsig': clnsigs,
-                'mc1': mc1s,
-                'mc2': mc2s,
+                'mc': mcs,
+                # 'mc2': mc2s,
                 'pos': poses}
     
     df = pd.DataFrame(df_dict)
 
-    print(f"All variants = {df.shape[0]}")
-
-    df_clnsig = df["clnsig"].str.split('|', expand=True).rename(columns=lambda x: f"clnsig_{x+1}")
-        # clnsig split creates four colums # 
-    
-    # merge df with clnsig columns #
-    df = pd.merge(df, df_clnsig, left_index=True, right_index=True)
+    print(f"All variants = {df.shape[0]}")    
     
     # mc_unique = pd.unique(np.append(df['mc1'].unique(), df['mc2'].unique()))
     """ unique entries for variant consequences
@@ -108,7 +84,6 @@ def tabulate_vcf(vcf):
     'genic_upstream_transcript_variant']
     """
 
-    print(f"rows in df after merge = {df.shape[0]}")
     # clnsig_unique = pd.unique(np.concatenate((df['clnsig_1'].unique(), df['clnsig_2'].unique(), df['clnsig_3'].unique(), df['clnsig_4'].unique()), axis=0))
     """ unique entries for clnsig  
     clnsig_unique unique ['Uncertain_significance' 'Likely_benign' 'Benign'
@@ -124,69 +99,59 @@ def tabulate_vcf(vcf):
     'Pathogenic/Likely_pathogenic/Likely_risk_allele' 'Pathogenic/Pathogenic'
     'Pathogenic/Likely_risk_allele' 'confers_sensitivity' None]
     """
+      
 
-    t_dict = {'Pathogenic': 'Pathogenic/Likely_pathogenic',
-              'Likely_pathogenic': 'Pathogenic/Likely_pathogenic',
-              'Pathogenic/Likely_pathogenic': 'Pathogenic/Likely_pathogenic',
-              'Pathogenic/Likely_pathogenic/Pathogenic': 'Pathogenic/Likely_pathogenic',
-              'Likely_pathogenic/Likely_risk_allele':'Pathogenic/Likely_pathogenic',
-              'Pathogenic/Pathogenic':'Pathogenic/Likely_pathogenic',
-              'Pathogenic/Likely_pathogenic/Likely_risk_allele': 'Pathogenic/Likely_pathogenic',
-              'Pathogenic/Likely_risk_allele': 'Pathogenic/Likely_pathogenic'}
+    clnsig_dict = {'Pathogenic': True,
+              'Likely_pathogenic': True,
+              'Pathogenic/Likely_pathogenic': True,
+              'Pathogenic/Likely_pathogenic/Pathogenic': True,
+              'Likely_pathogenic/Likely_risk_allele':True,
+              'Pathogenic/Pathogenic':True,
+              'Pathogenic/Likely_pathogenic/Likely_risk_allele': True,
+              'Pathogenic/Likely_risk_allele': True}
 
-    clnsig_cols = ['clnsig_1', 'clnsig_2','clnsig_3','clnsig_4']
-    for col in clnsig_cols:
-        get_t(t_dict, f"{col}", df, f"{col}_path")
-    
-    clnsig_path_cols = ['clnsig_1_path', 'clnsig_2_path','clnsig_3_path','clnsig_4_path']
-    
-    df["path"] = "Other"
+    df["clnsig_path"] = False
+    translate_column(clnsig_dict, "clnsig", df, "clnsig_path")
 
-    counter2= 0
-    for i, row in df.iterrows():
-        for col in clnsig_path_cols:
-            if pd.notna(row[col]):
-                df.loc[i, "path"] = row[col]
-        counter2+=1
-        print(f"df['path'] row {counter2} = {df.loc[i, 'path']}")
-    
-    # Assuming df and clnsig_path_cols are already defined
-    # df['path'] = df[clnsig_path_cols].bfill(axis=1).iloc[:, 0]
+    missense_dict = {'missense_variant': True}
+    lof_dict = {'nonsense': True,
+                'frameshift_variant': True,
+                'splice_donor_variant': True,
+                'splice_acceptor_variant': True}
+    if_indels_dict = {'ininframe_insertion': True,
+                      'inframe_deletion': True,
+                      'inframe_indel': True}
+    non_coding_dict = {'intron_variant': True,
+                       '5_prime_UTR_variant': True,
+                       '3_prime_UTR_variant': True,
+                       'genic_upstream_transcript_variant': True}
+    other_dict = {'synonymous_variant': True,
+                  'no_sequence_alteration': True,
+                  'initiator_codon_variant': True,
+                  'non-coding_transcript_variant': True,
+                  'stop_lost': True,
+                  'genic_downstream_transcript_variant': True,
+                  }
+    conseq_dict_list = [missense_dict, lof_dict, if_indels_dict, non_coding_dict, other_dict]
+    conseqs = ['missense', 'lof','in_frame','non_coding', 'other']
 
-    # If you need to print the updated rows
-    # for i, path in enumerate(df['path']):
-    #     print(f"df['path'] row {i+1} = {path}")
-
-    conseq_cols = ["mc1", "mc2"]
-    conseqs = ['missense', 'lof','in_frame','non_coding', 'other_consequence']
-    
-    counter2=0
-    for conseq in conseqs:
-        print(f"Now starting conseq {conseq}")
-        df[conseq] = "False"
-        for i, row in df.iterrows():
-            for col in conseq_cols:
-                if pd.notna(row[col]):
-                    df.loc[i, conseq] = "True"
-            counter2+=1
-            print(f"df['path'] row {counter2} = {df.loc[i, 'path']}")
-
-    
-    # for conseq in conseqs:
-    #     print(f"Now starting conseq {conseq}")
-    #     df[conseq] = df[conseq_cols].notna().any(axis=1).astype(str)
-        print(pd.crosstab(df["path"], df[conseq], margins=True))
-        print(pd.crosstab(df["path"], df[conseq], margins=True, normalize=True))
-    # If you need to print the updated rows
-    # for i, row in df.iterrows():
-    #     print(f"df['{conseq}'] row {i+1} = {row[conseq]}")
+    for conseq, conseq_dict in zip(conseqs, conseq_dict_list):
+        print(f"Now starting {conseq} variants")
+        df[conseq] = False
+        translate_column(conseq_dict, "mc", df, f"{conseq}")
+        # print(pd.crosstab(df["clnsig_path"], df[conseq], margins=True))
+        # print(pd.crosstab(df["clnsig_path"], df[conseq], margins=True, normalize=True))
 
 
-    df_consice = df[['gene_symbol', 'gene_id', 'path', 'clnsig', 'missense', 'lof','in_frame','non_coding', 'other_consequence']]
+    df_consice = df[['gene_symbol', 'gene_id', 'clnsig_path', 'missense', 'lof','in_frame','non_coding', 'other']]
     print(df_consice.head())
     return df_consice
 
 
 def summarise_variants(variants_df):
-      variants_df["path"] = ""
-      grouped_df = variants_df.groupby()
+    #   variants_df["path"] = ""
+      df = variants_df.loc[variants_df['clnsig_path']==True, :]
+
+      grouped_df = df.groupby(['gene_symbol']).sum()
+      print(grouped_df.head())
+      return grouped_df
