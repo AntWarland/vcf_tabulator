@@ -21,6 +21,8 @@ def tabulate_vcf(vcf):
     """
     vcf_in = VariantFile(vcf)
     counter = 0
+    
+    # Initialize empty record lists #
     gene_symbols = []
     gene_ids = []
     clnsigs = []
@@ -28,46 +30,48 @@ def tabulate_vcf(vcf):
     poses = []
 
     for rec in vcf_in.fetch():
-            
-            try:
-                gene_symbol = rec.info['GENEINFO'].split(":",2)[0]
-                gene_id_pre = rec.info['GENEINFO'].split(":",2)[1]
-                gene_id = gene_id_pre.split("|",2)[0]
-            except KeyError:
-                gene_symbol = "NA"
-                gene_id = "NA"
-            
-            try:
-                clnsig = rec.info['CLNSIG'][0]          
-            except KeyError:
-                clnsig = "NA"
-            
-            # MC : note maximum number of elements observed in the rec.info['MC'] tuple is 2 #
-            try:
-                if len(rec.info['MC']) > 1 :
-                    mc = str(rec.info['MC'][0]) + " " + str(rec.info['MC'][0])
-                    # mc2 = re.findall(r"\|(\S*)$", mc2)[0]
-                else:
-                    mc = str(rec.info['MC'][0])
-            except KeyError:
-                mc = np.NaN
-                # print(f"{var_id} variant type invalid")
+        # Attempt to retrieve GENEINFO record and split into symbol and id. Store as "NA" if attempt fails #
+        try:
+            gene_symbol = rec.info['GENEINFO'].split(":",2)[0]
+            gene_id_pre = rec.info['GENEINFO'].split(":",2)[1]
+            gene_id = gene_id_pre.split("|",2)[0]
+        except KeyError:
+            gene_symbol = "NA"
+            gene_id = "NA"
+        
+        # Attempt to retrieve CLNSIG record. Store as "NA" if attempt fails #
+        try:
+            clnsig = rec.info['CLNSIG'][0]          
+        except KeyError:
+            clnsig = "NA"
+        
+        # Attempt to retrieve MC record. Store as "NA" if attempt fails #            
+        # Note: maximum number of elements observed in the rec.info['MC'] tuple is 2 #
+        try:
+            if len(rec.info['MC']) > 1 :
+                mc = str(rec.info['MC'][0]) + " " + str(rec.info['MC'][0])
+            else:
+                mc = str(rec.info['MC'][0])
+        except KeyError:
+            mc = np.NaN
 
-            pos = rec.pos         
+        pos = rec.pos         
 
-            gene_symbols.append(gene_symbol)
-            gene_ids.append(gene_id)
-            clnsigs.append(clnsig)
-            mcs.append(mc)
-            poses.append(pos)
-            counter += 1
-    print(counter)
+        # Append records to empty lists #
+        gene_symbols.append(gene_symbol)
+        gene_ids.append(gene_id)
+        clnsigs.append(clnsig)
+        mcs.append(mc)
+        poses.append(pos)
+        
+        counter += 1
+    print(f"Number of records in VCF {counter}")
 
+    # create df using dictionary #
     df_dict = {'gene_symbol': gene_symbols,
                 'gene_id': gene_ids,
                 'clnsig': clnsigs,
                 'mc': mcs,
-                # 'mc2': mc2s,
                 'pos': poses}
     
     df = pd.DataFrame(df_dict)
@@ -100,8 +104,8 @@ def tabulate_vcf(vcf):
     'Pathogenic/Likely_pathogenic/Likely_risk_allele' 'Pathogenic/Pathogenic'
     'Pathogenic/Likely_risk_allele' 'confers_sensitivity' None]
     """
-      
-
+    
+    # Dictionary of all clnsig records that qualify as Pathogenic or Likely Pathogenic #
     clnsig_dict = {'Pathogenic': True,
               'Likely_pathogenic': True,
               'Pathogenic/Likely_pathogenic': True,
@@ -111,9 +115,11 @@ def tabulate_vcf(vcf):
               'Pathogenic/Likely_pathogenic/Likely_risk_allele': True,
               'Pathogenic/Likely_risk_allele': True}
 
+    # Create boolean column for pathogenic or likely pathogenic #
     df["clnsig_path"] = False
     translate_column(clnsig_dict, "clnsig", df, "clnsig_path")
 
+    # Create consequence dictionaries to group variant consequences #
     missense_dict = {'missense_variant': True}
     lof_dict = {'nonsense': True,
                 'frameshift_variant': True,
@@ -131,26 +137,37 @@ def tabulate_vcf(vcf):
                   'initiator_codon_variant': True,
                   'non-coding_transcript_variant': True,
                   'stop_lost': True,
-                  'genic_downstream_transcript_variant': True,
-                  }
+                  'genic_downstream_transcript_variant': True}
+    
+    # List consequence dictionaries and column names #
     conseq_dict_list = [missense_dict, lof_dict, if_indels_dict, non_coding_dict, other_dict]
     conseqs = ['missense', 'lof','in_frame','non_coding', 'other']
 
+    # Create boolean columns for consequence groups #
     for conseq, conseq_dict in zip(conseqs, conseq_dict_list):
         print(f"Now starting {conseq} variants")
         df[conseq] = False
         translate_column(conseq_dict, "mc", df, f"{conseq}")
-        # print(pd.crosstab(df["clnsig_path"], df[conseq], margins=True))
-        # print(pd.crosstab(df["clnsig_path"], df[conseq], margins=True, normalize=True))
 
-
+    # Slice for required columns #
     df_consice = df[['gene_symbol', 'gene_id', 'clnsig_path', 'missense', 'lof','in_frame','non_coding', 'other']]
     print(df_consice.head())
+    
     return df_consice
 
 
 def summarise_variants(variants_df):
+      """ 
+      Input: dataframe (output of tabulate_vcf)
+      Output: summary table grouped by gene with per gene sums across each binary column
+        """
+      # filter out non-clinically significant variants #
       df = variants_df.loc[variants_df['clnsig_path']==True, :]
+
+      # creat summary table #
       grouped_df = df.groupby(['gene_symbol', 'gene_id']).sum()
+      
+      # check contents #
       print(grouped_df.head())
+      
       return grouped_df
