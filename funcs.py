@@ -76,7 +76,7 @@ def tabulate_vcf(vcf):
     
     df = pd.DataFrame(df_dict)
 
-    print(f"All variants = {df.shape[0]}")    
+    print(f"Variants dataframe rows = {df.shape[0]}")    
     
     # mc_unique = pd.unique(np.append(df['mc1'].unique(), df['mc2'].unique()))
     """ unique entries for variant consequences
@@ -164,7 +164,7 @@ def summarise_variants(variants_df):
       # filter out non-clinically significant variants #
       df = variants_df.loc[variants_df['clnsig_path']==True, :]
 
-      # creat summary table #
+      # create summary table #
       grouped_df = df.groupby(['gene_symbol', 'gene_id']).sum()
       
       # check contents #

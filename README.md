@@ -21,7 +21,7 @@ Purpose:
 - so we can display to users what type of variants cause disease in each gene e.g. some genes don't have loss of function as a mechanism of disease
 
 Example run command:
-- python clinvar_tabulator.py --vcf ~/Documents/projects/clinvar_project/clinvar.vcf.gz
+- python vcf_tabulator.py --vcf ~/Documents/projects/clinvar_project/clinvar.vcf.gz
 
 Example output in:
 - example_output/df_path_variants_conseq.csv
